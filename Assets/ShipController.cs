@@ -14,9 +14,14 @@ public class ShipController : MonoBehaviour
     [Header("Cushion Settings")]
     [SerializeField] private KeyCode resetKey = KeyCode.R;
     
+    [Header("Debug/Testing")]
+    [SerializeField] private bool useKeyboardFallback = true;
+    [SerializeField] private float keyboardRotationSpeed = 90f;
+    
     private CushionData cushionData;
     private Rigidbody shipRigidbody;
     private Quaternion baseRotation;
+    private bool cushionConnected = false;
 
     void Start()
     {
@@ -26,6 +31,19 @@ public class ShipController : MonoBehaviour
             Debug.LogError("ShipController requires a Rigidbody component!");
             enabled = false;
             return;
+        }
+
+        // Ensure Rigidbody is set up correctly for movement
+        if (shipRigidbody.isKinematic)
+        {
+            Debug.LogWarning("ShipController: Rigidbody is kinematic! Setting to non-kinematic for physics movement.");
+            shipRigidbody.isKinematic = false;
+        }
+        
+        // Set reasonable drag if it's too high
+        if (shipRigidbody.drag > 5f)
+        {
+            Debug.LogWarning($"ShipController: Rigidbody drag is {shipRigidbody.drag}, which might be too high. Consider lowering it.");
         }
 
         MeshRenderer renderer = GetComponent<MeshRenderer>();
@@ -60,8 +78,9 @@ public class ShipController : MonoBehaviour
         // Check if CynteractDeviceManager exists in the scene
         if (CynteractDeviceManager.Instance == null)
         {
-            Debug.LogError("ShipController: CynteractDeviceManager not found in scene! " +
-                          "Please add a GameObject with CynteractDeviceManager script to your scene.");
+            Debug.LogWarning("ShipController: CynteractDeviceManager not found in scene! " +
+                          "Please add a GameObject with CynteractDeviceManager script to your scene. " +
+                          "Using keyboard controls as fallback.");
             return;
         }
 
@@ -72,21 +91,31 @@ public class ShipController : MonoBehaviour
             cushionData = new CushionData(device);
             // Reset cushion orientation on first connection
             cushionData.Reset();
+            cushionConnected = true;
+            baseRotation = transform.rotation;
             Debug.Log("Cushion connected and ready for ship control!");
         });
         
         Debug.Log("ShipController initialized. Waiting for cushion device to connect... " +
-                 "The ship will move forward automatically, but rotation requires a connected cushion device.");
+                 "The ship will move forward automatically. Press R to reset cushion orientation.");
     }
 
     void Update()
     {
         // Reset cushion orientation when R key is pressed
-        if (Input.GetKeyDown(resetKey) && cushionData != null)
+        if (Input.GetKeyDown(resetKey))
         {
-            cushionData.Reset();
-            baseRotation = transform.rotation;
-            Debug.Log("Cushion orientation reset!");
+            if (cushionData != null)
+            {
+                cushionData.Reset();
+                baseRotation = transform.rotation;
+                Debug.Log("Cushion orientation reset!");
+            }
+            else
+            {
+                baseRotation = transform.rotation;
+                Debug.Log("Base rotation reset!");
+            }
         }
     }
 
@@ -94,18 +123,23 @@ public class ShipController : MonoBehaviour
     {
         if (shipRigidbody == null) return;
 
-        // Apply forward force continuously
-        Vector3 forwardForce = transform.forward * forwardSpeed;
-        shipRigidbody.AddForce(forwardForce, ForceMode.Force);
-
-        // Limit maximum speed
-        if (shipRigidbody.velocity.magnitude > maxSpeed)
+        // Apply forward velocity directly (more reliable than force for constant forward movement)
+        Vector3 forwardVelocity = transform.forward * forwardSpeed;
+        
+        // Preserve any existing lateral velocity while maintaining forward speed
+        Vector3 lateralVelocity = Vector3.ProjectOnPlane(shipRigidbody.velocity, transform.forward);
+        Vector3 targetVelocity = forwardVelocity + lateralVelocity;
+        
+        // Clamp the total velocity to maxSpeed
+        if (targetVelocity.magnitude > maxSpeed)
         {
-            shipRigidbody.velocity = shipRigidbody.velocity.normalized * maxSpeed;
+            targetVelocity = targetVelocity.normalized * maxSpeed;
         }
+        
+        shipRigidbody.velocity = targetVelocity;
 
-        // Control rotation based on cushion tilt
-        if (cushionData != null)
+        // Control rotation based on cushion tilt or keyboard fallback
+        if (cushionConnected && cushionData != null)
         {
             // Get the reset rotation of the cushion's palmCenter sensor
             // This gives rotation relative to when Reset() was called
@@ -123,6 +157,20 @@ public class ShipController : MonoBehaviour
 
             // Apply rotation using Rigidbody for physics-based movement
             shipRigidbody.MoveRotation(desiredRotation);
+        }
+        else if (useKeyboardFallback)
+        {
+            // Fallback keyboard controls for testing
+            float horizontal = Input.GetAxis("Horizontal");
+            float vertical = Input.GetAxis("Vertical");
+            
+            if (Mathf.Abs(horizontal) > 0.1f || Mathf.Abs(vertical) > 0.1f)
+            {
+                Vector3 rotationDelta = new Vector3(-vertical, horizontal, 0) * keyboardRotationSpeed * Time.fixedDeltaTime;
+                Quaternion deltaRotation = Quaternion.Euler(rotationDelta);
+                Quaternion targetRotation = transform.rotation * deltaRotation;
+                shipRigidbody.MoveRotation(targetRotation);
+            }
         }
     }
 }
