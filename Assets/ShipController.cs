@@ -12,7 +12,7 @@ public class ShipController : MonoBehaviour
     [SerializeField] private float maxSpeed = 50f;
     
     [Header("Cushion Settings")]
-    [SerializeField] private KeyCode resetKey = KeyCode.R; // Key to reset cushion orientation
+    [SerializeField] private KeyCode resetKey = KeyCode.R;
     
     private CushionData cushionData;
     private Rigidbody shipRigidbody;
@@ -28,7 +28,6 @@ public class ShipController : MonoBehaviour
             return;
         }
 
-        // Fix material if it's missing (pink cube issue)
         MeshRenderer renderer = GetComponent<MeshRenderer>();
         if (renderer != null)
         {
@@ -56,8 +55,15 @@ public class ShipController : MonoBehaviour
             }
         }
 
-        // Initialize base rotation
         baseRotation = transform.rotation;
+
+        // Check if CynteractDeviceManager exists in the scene
+        if (CynteractDeviceManager.Instance == null)
+        {
+            Debug.LogError("ShipController: CynteractDeviceManager not found in scene! " +
+                          "Please add a GameObject with CynteractDeviceManager script to your scene.");
+            return;
+        }
 
         // Wait for the device to be ready (following the pattern from examples)
         CynteractDeviceManager.Instance.ListenOnReady(device =>
@@ -68,6 +74,9 @@ public class ShipController : MonoBehaviour
             cushionData.Reset();
             Debug.Log("Cushion connected and ready for ship control!");
         });
+        
+        Debug.Log("ShipController initialized. Waiting for cushion device to connect... " +
+                 "The ship will move forward automatically, but rotation requires a connected cushion device.");
     }
 
     void Update()
