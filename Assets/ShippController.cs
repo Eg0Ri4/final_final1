@@ -34,7 +34,6 @@ public class CynteractShip : MonoBehaviour
 
     void Start()
     {
-<<<<<<< HEAD
         Cursor.visible = false;
         
         // Save starting position for respawn
@@ -74,32 +73,6 @@ public class CynteractShip : MonoBehaviour
         {
             Debug.LogWarning("Cynteract device not available: " + e.Message);
             deviceError = true;
-=======
-        // В этом режиме курсор ДОЛЖЕН быть виден, не блокируем его
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
-        
-        // Добавляем тег Player если его нет (для системы чекпоинтов)
-        if (string.IsNullOrEmpty(gameObject.tag) || gameObject.tag == "Untagged")
-        {
-            // Тег должен быть создан в Unity Editor: Edit -> Project Settings -> Tags
-            // Или можно использовать проверку по компоненту ShipPadControl
-        }
-        
-        // Добавляем Rigidbody если его нет (нужен для триггеров)
-        if (GetComponent<Rigidbody>() == null)
-        {
-            Rigidbody rb = gameObject.AddComponent<Rigidbody>();
-            rb.useGravity = false;
-            rb.isKinematic = true; // Kinematic чтобы не влияла физика
-        }
-        
-        // Добавляем коллайдер если его нет
-        if (GetComponent<Collider>() == null)
-        {
-            BoxCollider col = gameObject.AddComponent<BoxCollider>();
-            col.size = Vector3.one * 2f; // Размер можно настроить под модель
->>>>>>> 0e7259d3d6a5ed82554feecc436b076242c27e7c
         }
     }
 
