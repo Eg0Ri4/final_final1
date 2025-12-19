@@ -30,6 +30,40 @@ public class ShipController : MonoBehaviour
             return;
         }
 
+        // Fix material if it's missing (pink cube issue)
+        MeshRenderer renderer = GetComponent<MeshRenderer>();
+        if (renderer != null)
+        {
+            // Check if material is missing or invalid
+            if (renderer.sharedMaterial == null || renderer.sharedMaterial.name.Contains("Default-Material") || 
+                renderer.sharedMaterial.shader.name.Contains("Hidden/InternalErrorShader"))
+            {
+                // Try to find a suitable shader
+                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null)
+                {
+                    shader = Shader.Find("Standard");
+                }
+                if (shader == null)
+                {
+                    shader = Shader.Find("Unlit/Color");
+                }
+                
+                if (shader != null)
+                {
+                    // Create a simple default material
+                    Material defaultMaterial = new Material(shader);
+                    defaultMaterial.color = new Color(0.5f, 0.7f, 1f, 1f); // Light blue color
+                    renderer.material = defaultMaterial;
+                    Debug.Log("Ship material created successfully");
+                }
+                else
+                {
+                    Debug.LogWarning("Could not find a suitable shader for ship material");
+                }
+            }
+        }
+
         // Make sure CynteractDeviceManager exists in the scene
         if (CynteractDeviceManager.Instance == null)
         {
@@ -40,7 +74,7 @@ public class ShipController : MonoBehaviour
         CynteractDeviceManager.Instance?.ListenOnReady(device =>
         {
             // Check if device is a cushion
-            if (device.DeviceType == DeviceType.Cushion)
+            if (device.DeviceType == Cynteract.InputDevices.DeviceType.Cushion)
             {
                 cushionData = new CushionData(device);
                 isCushionReady = true;
@@ -76,26 +110,47 @@ public class ShipController : MonoBehaviour
             shipRigidbody.velocity = shipRigidbody.velocity.normalized * maxSpeed;
         }
 
-        // Control rotation based on cushion tilt
+        // Control rotation based on cushion tilt or keyboard input
+        Quaternion targetRotation = transform.rotation;
+        bool hasInput = false;
+
         if (isCushionReady && cushionData != null)
         {
-            Quaternion targetRotation;
-            
+            // Use cushion input
             if (useResetRotation)
             {
-                // Get reset rotation (relative to initial orientation)
                 targetRotation = cushionData.GetResetRotationOfPartOrDefault(FingerPart.palmCenter);
             }
             else
             {
-                // Get absolute rotation
                 targetRotation = cushionData.GetAbsoluteRotationOfPartOrDefault(FingerPart.palmCenter);
             }
+            targetRotation = targetRotation * baseRotation;
+            hasInput = true;
+        }
+        else
+        {
+            // Fallback to keyboard controls
+            float horizontal = Input.GetAxis("Horizontal");
+            float vertical = Input.GetAxis("Vertical");
+            
+            if (Mathf.Abs(horizontal) > 0.1f || Mathf.Abs(vertical) > 0.1f)
+            {
+                // Rotate based on arrow keys or WASD
+                float rotationY = horizontal * rotationSpeed * Time.fixedDeltaTime;
+                float rotationX = -vertical * rotationSpeed * Time.fixedDeltaTime;
+                
+                targetRotation = transform.rotation * Quaternion.Euler(rotationX, rotationY, 0);
+                hasInput = true;
+            }
+        }
 
+        if (hasInput)
+        {
             // Apply rotation with sensitivity and smooth rotation
             Quaternion desiredRotation = Quaternion.Slerp(
                 transform.rotation,
-                targetRotation * baseRotation,
+                targetRotation,
                 rotationSensitivity * Time.fixedDeltaTime
             );
 
