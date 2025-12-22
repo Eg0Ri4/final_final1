@@ -1,5 +1,7 @@
 {
     "dependencies": {
+        "com.cynteract.connector": "git+https://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@github.com/Cynteract/Connector.git?path=/frontend/Unity/Packages/com.cynteract.connector#v3.1.1-beta.1",
+        "com.github-glitchenzo.nugetforunity": "https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity",
         "com.unity.ai.navigation": "2.0.9",
         "com.unity.collab-proxy": "2.10.2",
         "com.unity.ide.visualstudio": "2.0.23",
