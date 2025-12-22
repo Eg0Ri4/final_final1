@@ -369,7 +369,11 @@ MonoBehaviour:
   maxBoostSpeed: 45
   boostBuildUpSpeed: 5
   boostDecaySpeed: 10
-  rockingThreshold: 1
+  minRockAngle: 2
+  minAngularVelocity: 30
+  rocksForBoost: 3
+  rockWindowTime: 2
+  frequencyBoostMultiplier: 2
 --- !u!50 &293571807
 Rigidbody2D:
   serializedVersion: 5
@@ -427,8 +431,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxCheckpoints: 5
-  checkpointSize: 8
-  minDistanceFromShip: 40
+  checkpointSize: 40
+  triggerRadius: 20
+  minDistanceFromShip: 20
+  checkpointPrefab: {fileID: 6667897003178556277, guid: 99a91a27239ab514ab1cf04a93942ee8, type: 3}
+  checkpointMaterial: {fileID: 0}
+  checkpointTextures: []
+  rotationSpeed: 50
+  enablePulse: 1
+  pulseSpeed: 2
+  pulseAmount: 0.1
+  enableLight: 1
+  lightColor: {r: 0.04045032, g: 0.9528302, b: 0.87601227, a: 1}
+  lightIntensity: 30
+  lightRange: 100
 --- !u!4 &335218294
 Transform:
   m_ObjectHideFlags: 0
@@ -687,7 +703,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1387192282
+--- !u!1 &1580846480
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -695,40 +711,41 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1387192284}
-  - component: {fileID: 1387192283}
+  - component: {fileID: 1580846482}
+  - component: {fileID: 1580846481}
   m_Layer: 0
-  m_Name: CheckpointManager
+  m_Name: GameObject
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1387192283
+--- !u!114 &1580846481
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1387192282}
+  m_GameObject: {fileID: 1580846480}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: eeb1d587fb08c384f9daad599e016e4d, type: 3}
+  m_Script: {fileID: 11500000, guid: d84ab936983ed1c448cd74b735b8b6d3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxCheckpoints: 5
-  checkpointSize: 10
-  minDistanceFromShip: 40
---- !u!4 &1387192284
+  scoreText: {fileID: 0}
+  prefix: 'Checkpoints: '
+  textColor: {r: 1, g: 1, b: 1, a: 1}
+  fontSize: 36
+--- !u!4 &1580846482
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1387192282}
+  m_GameObject: {fileID: 1580846480}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 16.338902, y: 16.685709, z: 5.9659443}
+  m_LocalPosition: {x: 105.66809, y: 20.777626, z: 9.280618}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -764,11 +781,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   asteroidPrefab: {fileID: 2915350208245513600, guid: 2ce4003cc6ec8574481660299c7b4e4a, type: 3}
-  asteroidsToSpawn: 500
-  spawnRadius: 100
+  asteroidsToSpawn: 3000
+  spawnRadius: 250
   minDistanceFromShip: 30
-  minSize: 80
-  maxSize: 120
+  minSize: 120
+  maxSize: 400
 --- !u!4 &1787162291
 Transform:
   m_ObjectHideFlags: 0
@@ -784,6 +801,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1933655397
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1933655399}
+  - component: {fileID: 1933655398}
+  m_Layer: 0
+  m_Name: CheckpointIndicator
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1933655398
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1933655397}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d68255023e6b754389544b1cf08483d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  arrowColor: {r: 0, g: 1, b: 0, a: 1}
+  arrowSize: 50
+  screenEdgeOffset: 50
+  showDistance: 1
+  distanceFontSize: 20
+--- !u!4 &1933655399
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1933655397}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -27.213577, y: -141.85867, z: -44.295227}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -791,6 +857,7 @@ SceneRoots:
   - {fileID: 264517214}
   - {fileID: 293571805}
   - {fileID: 1189249735}
-  - {fileID: 1387192284}
   - {fileID: 1787162291}
   - {fileID: 335218294}
+  - {fileID: 1580846482}
+  - {fileID: 1933655399}

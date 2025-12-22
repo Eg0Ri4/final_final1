@@ -7,30 +7,43 @@ public class CynteractShip : MonoBehaviour
     public float flySpeed = 30f;
     public float rotationSmoothness = 5f;
     
+    [Header("Keyboard Controls (Fallback)")]
+    public bool useKeyboardFallback = true;     // Enable keyboard when device not available
+    public float keyboardRotationSpeed = 60f;   // Degrees per second for keyboard
+    public float keyboardBoostSpeed = 60f;      // Speed when holding Shift
+    
     [Header("Ускорение (качание влево-вправо)")]
-    public float maxBoostSpeed = 60f;       // Максимальная скорость при ускорении
-    public float boostBuildUpSpeed = 5f;    // Как быстро набирается скорость
-    public float boostDecaySpeed = 10f;     // Как быстро падает скорость (когда не качаешь)
-    public float rockingThreshold = 5f;     // Минимальный угол качания для ускорения
+    public float maxBoostSpeed = 80f;           // Максимальная скорость при ускорении
+    public float boostBuildUpSpeed = 15f;       // Базовая скорость набора ускорения
+    public float boostDecaySpeed = 20f;         // Как быстро падает скорость
+    public float minRockAngle = 8f;             // Минимальный угол для засчитывания качания
+    public float minAngularVelocity = 30f;      // Минимальная угловая скорость (градусов/сек)
+    
+    [Header("Настройки детекции качания")]
+    public int rocksForBoost = 3;               // Сколько качаний нужно для начала ускорения
+    public float rockWindowTime = 1.5f;         // Окно времени для подсчёта качаний (сек)
+    public float frequencyBoostMultiplier = 2f; // Множитель скорости от частоты качаний
 
     // Cynteract device data
     private CushionData cushionData;
-    private bool deviceError = false;
     private Quaternion targetRotation;
     private Quaternion currentRotation;
+    private bool deviceConnected = false;
+    private bool deviceConnectionAttempted = false;
     
     // Starting position for respawn
     private Vector3 startPosition;
     private Quaternion startRotation;
     
-    // Boost system
+    // Improved boost system
     private float currentSpeed;
     private float lastRollAngle = 0f;
-    private float timeSinceLastRock = 0f;   // Время с последнего качания
-    private float rockTimeout = 0.3f;        // Сколько времени без качания = замедление
-    private int rockDirection = 0;           // Направление качания (-1 влево, 1 вправо)
-    private int lastRockDirection = 0;       // Предыдущее направление
-    private bool isRocking = false;          // Сейчас качает?
+    private float angularVelocity = 0f;         // Угловая скорость
+    private int lastRockDirection = 0;          // Предыдущее направление (-1 влево, 1 вправо)
+    private float[] rockTimestamps;             // Время каждого качания
+    private int rockIndex = 0;                  // Индекс в массиве
+    private float lastPeakAngle = 0f;           // Последний пиковый угол
+    private bool wasMovingRight = false;        // Двигался вправо?
 
     void Start()
     {
@@ -43,6 +56,9 @@ public class CynteractShip : MonoBehaviour
         currentRotation = transform.rotation;
         targetRotation = transform.rotation;
         currentSpeed = flySpeed;
+        
+        // Инициализируем массив для отслеживания качаний
+        rockTimestamps = new float[20];  // Храним до 20 последних качаний
 
         // Setup collider for collision detection
         Collider col = GetComponent<Collider>();
@@ -57,44 +73,57 @@ public class CynteractShip : MonoBehaviour
             col.isTrigger = true;
         }
 
-        // Connect to device
-        try
+        // Connect to device (only try once)
+        if (!deviceConnectionAttempted)
         {
-            if (CynteractDeviceManager.Instance != null)
+            deviceConnectionAttempted = true;
+            try
             {
-                CynteractDeviceManager.Instance.ListenOnReady(device =>
+                if (CynteractDeviceManager.Instance != null)
                 {
-                    cushionData = new CushionData(device);
-                    Debug.Log("Cynteract device connected!");
-                });
+                    CynteractDeviceManager.Instance.ListenOnReady(device =>
+                    {
+                        cushionData = new CushionData(device);
+                        deviceConnected = true;
+                        Debug.Log("Cynteract device connected!");
+                    });
+                }
+                else
+                {
+                    Debug.Log("No Cynteract device found. Using keyboard controls (WASD/Arrow keys + Shift for boost)");
+                }
             }
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogWarning("Cynteract device not available: " + e.Message);
-            deviceError = true;
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("Cynteract device not available: " + e.Message + "\nUsing keyboard controls instead.");
+            }
         }
     }
 
     void Update()
     {
-        if (cushionData == null)
+        // Try Cynteract device first
+        if (cushionData != null && deviceConnected)
         {
-            return;
+            try
+            {
+                targetRotation = cushionData.GetAbsoluteRotationOfPartOrDefault(FingerPart.palmCenter);
+                currentRotation = Quaternion.Slerp(currentRotation, targetRotation, Time.deltaTime * rotationSmoothness);
+                transform.rotation = currentRotation;
+                
+                // Проверяем качание влево-вправо для ускорения
+                CheckRockingBoost();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("Device read error: " + e.Message);
+                deviceConnected = false;  // Disable device on error
+            }
         }
-
-        try
+        // Fallback to keyboard controls
+        else if (useKeyboardFallback)
         {
-            targetRotation = cushionData.GetAbsoluteRotationOfPartOrDefault(FingerPart.palmCenter);
-            currentRotation = Quaternion.Slerp(currentRotation, targetRotation, Time.deltaTime * rotationSmoothness);
-            transform.rotation = currentRotation;
-            
-            // Проверяем качание влево-вправо для ускорения
-            CheckRockingBoost();
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogWarning("Device read error: " + e.Message);
+            HandleKeyboardControls();
         }
 
         // Двигаем корабль с текущей скоростью
@@ -104,7 +133,36 @@ public class CynteractShip : MonoBehaviour
         CheckAsteroidCollision();
     }
     
-    // Проверяем качание влево-вправо для ускорения
+    // Keyboard fallback controls
+    void HandleKeyboardControls()
+    {
+        // Get input
+        float horizontal = Input.GetAxis("Horizontal");  // A/D or Left/Right arrows
+        float vertical = Input.GetAxis("Vertical");      // W/S or Up/Down arrows
+        
+        // Rotate ship based on input
+        float pitchChange = -vertical * keyboardRotationSpeed * Time.deltaTime;  // Up/Down
+        float yawChange = horizontal * keyboardRotationSpeed * Time.deltaTime;   // Left/Right
+        float rollChange = 0f;
+        
+        // Q/E for roll
+        if (Input.GetKey(KeyCode.Q)) rollChange = keyboardRotationSpeed * Time.deltaTime;
+        if (Input.GetKey(KeyCode.E)) rollChange = -keyboardRotationSpeed * Time.deltaTime;
+        
+        transform.Rotate(pitchChange, yawChange, rollChange, Space.Self);
+        
+        // Boost with Shift
+        if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+        {
+            currentSpeed = Mathf.MoveTowards(currentSpeed, keyboardBoostSpeed, boostBuildUpSpeed * Time.deltaTime);
+        }
+        else
+        {
+            currentSpeed = Mathf.MoveTowards(currentSpeed, flySpeed, boostDecaySpeed * Time.deltaTime);
+        }
+    }
+    
+    // Улучшенная система детекции качания
     void CheckRockingBoost()
     {
         // Получаем текущий угол наклона (roll) - Z ось
@@ -113,52 +171,88 @@ public class CynteractShip : MonoBehaviour
         // Конвертируем в -180 to 180
         if (currentRollAngle > 180f) currentRollAngle -= 360f;
         
-        // Вычисляем изменение угла
-        float rollChange = currentRollAngle - lastRollAngle;
+        // Вычисляем угловую скорость (градусов в секунду)
+        float deltaAngle = currentRollAngle - lastRollAngle;
         
         // Игнорируем скачки больше 180 (переход через границу)
-        if (Mathf.Abs(rollChange) > 180f)
+        if (Mathf.Abs(deltaAngle) > 180f)
         {
             lastRollAngle = currentRollAngle;
             return;
         }
         
-        // Определяем направление качания
-        if (rollChange > rockingThreshold)
+        angularVelocity = deltaAngle / Time.deltaTime;
+        
+        // Определяем текущее направление движения
+        bool isMovingRight = angularVelocity > minAngularVelocity;
+        bool isMovingLeft = angularVelocity < -minAngularVelocity;
+        
+        // Детектируем смену направления (пик качания)
+        // Качание засчитывается когда:
+        // 1. Сменилось направление движения
+        // 2. Угол отклонения от последнего пика достаточный
+        // 3. Угловая скорость достаточная
+        
+        bool directionChanged = false;
+        
+        if (isMovingRight && !wasMovingRight && lastRockDirection == -1)
         {
-            rockDirection = 1;  // Качаем вправо
+            // Начали двигаться вправо после движения влево
+            float angleFromPeak = Mathf.Abs(currentRollAngle - lastPeakAngle);
+            if (angleFromPeak >= minRockAngle)
+            {
+                directionChanged = true;
+                lastRockDirection = 1;
+                lastPeakAngle = currentRollAngle;
+            }
         }
-        else if (rollChange < -rockingThreshold)
+        else if (isMovingLeft && wasMovingRight && lastRockDirection == 1)
         {
-            rockDirection = -1; // Качаем влево
-        }
-        else
-        {
-            rockDirection = 0;  // Не качаем
+            // Начали двигаться влево после движения вправо
+            float angleFromPeak = Mathf.Abs(currentRollAngle - lastPeakAngle);
+            if (angleFromPeak >= minRockAngle)
+            {
+                directionChanged = true;
+                lastRockDirection = -1;
+                lastPeakAngle = currentRollAngle;
+            }
         }
         
-        // Проверяем смену направления (реальное качание туда-сюда)
-        if (rockDirection != 0 && rockDirection != lastRockDirection && lastRockDirection != 0)
+        // Инициализация направления если ещё не задано
+        if (lastRockDirection == 0)
         {
-            // Сменили направление = качаем!
-            isRocking = true;
-            timeSinceLastRock = 0f;
+            if (isMovingRight) lastRockDirection = 1;
+            else if (isMovingLeft) lastRockDirection = -1;
+            lastPeakAngle = currentRollAngle;
         }
         
-        // Обновляем таймер
-        timeSinceLastRock += Time.deltaTime;
-        
-        // Если долго не качали - перестали качать
-        if (timeSinceLastRock > rockTimeout)
+        // Записываем качание
+        if (directionChanged)
         {
-            isRocking = false;
+            rockTimestamps[rockIndex] = Time.time;
+            rockIndex = (rockIndex + 1) % rockTimestamps.Length;
         }
         
-        // Управление скоростью
-        if (isRocking)
+        // Считаем количество качаний за последнее время
+        float currentTime = Time.time;
+        int recentRocks = 0;
+        for (int i = 0; i < rockTimestamps.Length; i++)
         {
-            // Ускоряемся!
-            currentSpeed += boostBuildUpSpeed * Time.deltaTime * 10f;
+            if (currentTime - rockTimestamps[i] <= rockWindowTime && rockTimestamps[i] > 0)
+            {
+                recentRocks++;
+            }
+        }
+        
+        // Вычисляем частоту качаний (качаний в секунду)
+        float rockFrequency = recentRocks / rockWindowTime;
+        
+        // Управление скоростью на основе частоты качаний
+        if (recentRocks >= rocksForBoost)
+        {
+            // Чем чаще качаешь - тем быстрее ускоряешься!
+            float frequencyMultiplier = 1f + (rockFrequency * frequencyBoostMultiplier);
+            currentSpeed += boostBuildUpSpeed * frequencyMultiplier * Time.deltaTime;
             currentSpeed = Mathf.Min(currentSpeed, maxBoostSpeed);
         }
         else
@@ -171,12 +265,23 @@ public class CynteractShip : MonoBehaviour
             }
         }
         
-        // Сохраняем значения
-        if (rockDirection != 0)
-        {
-            lastRockDirection = rockDirection;
-        }
+        // Сохраняем состояние
+        if (isMovingRight) wasMovingRight = true;
+        else if (isMovingLeft) wasMovingRight = false;
+        
         lastRollAngle = currentRollAngle;
+    }
+    
+    // Получить текущую скорость (для UI или отладки)
+    public float GetCurrentSpeed()
+    {
+        return currentSpeed;
+    }
+    
+    // Получить процент ускорения (0-1)
+    public float GetBoostPercent()
+    {
+        return Mathf.InverseLerp(flySpeed, maxBoostSpeed, currentSpeed);
     }
     
     // Manual collision check as backup
@@ -210,11 +315,24 @@ public class CynteractShip : MonoBehaviour
         
         // Полный сброс скорости и качания
         currentSpeed = flySpeed;
-        isRocking = false;
-        timeSinceLastRock = 0f;
         lastRockDirection = 0;
-        rockDirection = 0;
         lastRollAngle = 0f;
+        angularVelocity = 0f;
+        lastPeakAngle = 0f;
+        wasMovingRight = false;
+        
+        // Очищаем историю качаний
+        for (int i = 0; i < rockTimestamps.Length; i++)
+        {
+            rockTimestamps[i] = 0f;
+        }
+        rockIndex = 0;
+        
+        // Reset checkpoint score to 0
+        if (CheckpointManager.Instance != null)
+        {
+            CheckpointManager.Instance.ResetScore();
+        }
         
         Debug.Log("Ship respawned at start position!");
     }

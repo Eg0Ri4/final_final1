@@ -12,8 +12,8 @@ public class Checkpoint : MonoBehaviour
         // Проверяем что это корабль и чекпоинт ещё не собран
         if (collected) return;
         
-        // Проверяем по тегу или по наличию компонента ShipPadControl
-        if (other.CompareTag("Player") || other.GetComponent<ShipPadControl>() != null)
+        // Проверяем по тегу или по наличию компонента CynteractShip
+        if (other.CompareTag("Player") || other.GetComponent<CynteractShip>() != null)
         {
             collected = true;
             
